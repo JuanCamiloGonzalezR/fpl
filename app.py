@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(layout="wide", page_title="Planeador Financiero & Caja")
+st.set_page_config(layout="wide", page_title="Planeador Financiero & Caja V3")
 
 # --- ESTILOS CSS ---
 st.markdown("""
@@ -30,9 +31,10 @@ carga_prestacional = st.sidebar.slider(
 
 st.sidebar.markdown("---")
 
-# 2. Configuración de Flujo de Caja (NUEVO)
-st.sidebar.subheader("⏳ Ciclo de Caja (Cash Flow)")
-dias_pago_proveedor = st.sidebar.slider("Días Crédito Proveedores", 0, 90, 0, help="¿Cuántos días te dan tus proveedores para pagar los insumos? (0 = Contado)")
+# 2. Configuración de Caja Inicial (NUEVO)
+st.sidebar.subheader("💰 Posición de Caja")
+caja_inicial = st.sidebar.number_input("Saldo en Banco HOY (Capital Inicial)", value=20000000, step=1000000, help="Con cuánto dinero arrancamos el Año 1.")
+dias_pago_proveedor = st.sidebar.slider("Días Crédito Proveedores", 0, 90, 0)
 
 st.sidebar.markdown("---")
 
@@ -57,70 +59,52 @@ st.sidebar.metric("Gasto Fijo Mensual HQ", f"{currency}{total_corporate_cost:,.0
 
 # --- LÓGICA PRINCIPAL ---
 
-st.title("📊 Simulador P&L + Necesidad de Caja")
-st.markdown("Ahora incluimos el **Costo de Venta (COGS)** y el impacto del **Flujo de Caja** por tiempos de pago.")
+st.title("📊 Simulador Estratégico + Mapa de Calor de Caja")
 
 results = []
 
-tab1, tab2, tab3, tab4 = st.tabs(["📍 Tienda Cedritos", "📍 Tienda Villas", "🛒 Tienda Virtual", "🤝 Canal B2B"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📍 Tienda Cedritos", "📍 Tienda Villas", "🛒 Tienda Virtual", "🤝 Canal B2B", "📅 Proyección Anual (Flujo)"])
 
 def render_unit_inputs(key_suffix, title, default_rent, default_rev, default_margin, default_days_receivable, sunday_op_default):
-    st.subheader(f"Unit: {title}")
-    
-    c1, c2, c3, c4 = st.columns(4)
-    
-    with c1:
-        st.markdown("##### 💰 Ventas & Margen")
-        revenue = st.slider(f"Ventas Mes ({title})", 0, default_rev*3, default_rev, 500000, key=f"rev_{key_suffix}")
-        margin_pct = st.slider(f"Margen Bruto % ({title})", 0.1, 0.9, default_margin, 0.05, key=f"mar_{key_suffix}", help="Si vendes a 100 y te cuesta 50, tu margen es 50%.")
-    
-    with c2:
-        st.markdown("##### ⏳ Flujo de Caja")
-        dias_cartera = st.number_input(f"Días Cobro Clientes ({title})", value=default_days_receivable, step=15, key=f"dias_{key_suffix}", help="0 = Efectivo inmediato. 45 = Pagan a 45 días.")
+    with st.container():
+        st.subheader(f"Unidad: {title}")
+        c1, c2, c3, c4 = st.columns(4)
         
-    with c3:
-        st.markdown("##### 🏗️ Costos Fijos")
-        rent = st.number_input(f"Arriendo ({title})", value=default_rent, step=100000, key=f"rent_{key_suffix}")
-        utilities = st.number_input(f"Servicios/Ads ({title})", value=500000, step=50000, key=f"util_{key_suffix}")
+        with c1:
+            revenue = st.slider(f"Ventas Mes ({title})", 0, default_rev*3, default_rev, 500000, key=f"rev_{key_suffix}")
+            margin_pct = st.slider(f"Margen Bruto % ({title})", 0.1, 0.9, default_margin, 0.05, key=f"mar_{key_suffix}")
         
-    with c4:
-        st.markdown("##### 👥 Nómina")
-        headcount = st.number_input(f"Empleados ({title})", value=2, step=1, key=f"hc_{key_suffix}")
-        role_salary = st.number_input(f"Salario Base ({title})", value=1300000, step=50000, key=f"sal_{key_suffix}")
-        sunday_op = st.checkbox("Domingo a Domingo", value=sunday_op_default, key=f"sun_{key_suffix}")
-        multiplier = 1.2 if sunday_op else 1.0
+        with c2:
+            dias_cartera = st.number_input(f"Días Cobro ({title})", value=default_days_receivable, step=15, key=f"dias_{key_suffix}")
+            
+        with c3:
+            rent = st.number_input(f"Arriendo ({title})", value=default_rent, step=100000, key=f"rent_{key_suffix}")
+            utilities = st.number_input(f"Servicios/Ads ({title})", value=500000, step=50000, key=f"util_{key_suffix}")
+            
+        with c4:
+            headcount = st.number_input(f"Empleados ({title})", value=2, step=1, key=f"hc_{key_suffix}")
+            role_salary = st.number_input(f"Salario Base ({title})", value=1300000, step=50000, key=f"sal_{key_suffix}")
+            sunday_op = st.checkbox("Domingo a Domingo", value=sunday_op_default, key=f"sun_{key_suffix}")
+            multiplier = 1.2 if sunday_op else 1.0
+            
+        # --- CÁLCULOS P&L ---
+        cogs = revenue * (1 - margin_pct) 
+        gross_profit = revenue - cogs
+        labor_cost = headcount * role_salary * carga_prestacional * multiplier
+        opex = rent + utilities + labor_cost
+        net_profit = gross_profit - opex
         
-    # --- CÁLCULOS P&L ---
-    cogs = revenue * (1 - margin_pct) # Costo de la mercancía
-    gross_profit = revenue - cogs     # Utilidad Bruta
-    
-    labor_cost = headcount * role_salary * carga_prestacional * multiplier
-    opex = rent + utilities + labor_cost
-    
-    net_profit = gross_profit - opex
-    
-    # --- CÁLCULOS DE CAJA (Working Capital) ---
-    # Dinero atrapado en cuentas por cobrar (Lo que vendiste y no te han pagado)
-    ar_cash_trap = (revenue / 30) * dias_cartera 
-    
-    # Dinero financiado por proveedores (Lo que compraste y no has pagado)
-    ap_financing = (cogs / 30) * dias_pago_proveedor
-    
-    # Necesidad Neta de Capital de Trabajo para esta unidad
-    working_capital_need = ar_cash_trap - ap_financing
-
-    return {
-        "Unidad": title,
-        "Ingresos": revenue,
-        "COGS (Costo Venta)": cogs,
-        "Utilidad Bruta": gross_profit,
-        "Gastos Operativos": opex,
-        "Utilidad Operativa": net_profit,
-        "Necesidad Caja": working_capital_need
-    }
+        return {
+            "Unidad": title,
+            "Ingresos": revenue,
+            "COGS": cogs,
+            "Utilidad Bruta": gross_profit,
+            "Gastos Operativos": opex,
+            "Utilidad Operativa": net_profit,
+            "Tipo": "B2B" if "B2B" in title else "DTC"
+        }
 
 # --- RENDERIZAR UNIDADES ---
-# Nota: B2B tiene margen más bajo (ej. 40%) y días de cobro altos (45). Tiendas margen alto (55%) y cobro 0.
 
 with tab1:
     cedritos = render_unit_inputs("ced", "Tienda Cedritos", 3000000, 15000000, 0.55, 0, True)
@@ -131,82 +115,133 @@ with tab2:
     results.append(villas)
 
 with tab3:
-    virtual = render_unit_inputs("virt", "Tienda Virtual", 1000000, 8000000, 0.50, 5, False) # 5 días asumiendo pasarela de pagos
+    virtual = render_unit_inputs("virt", "Tienda Virtual", 1000000, 8000000, 0.50, 5, False)
     results.append(virtual)
 
 with tab4:
     b2b = render_unit_inputs("b2b", "Canal B2B", 0, 20000000, 0.40, 45, False)
     results.append(b2b)
 
-# --- CONSOLIDADO ---
-df = pd.DataFrame(results)
-st.markdown("---")
+# --- PROCESAMIENTO DE DATOS ---
+df_units = pd.DataFrame(results)
 
-# Totales P&L
-total_revenue = df["Ingresos"].sum()
-total_cogs = df["COGS (Costo Venta)"].sum()
-total_gross = total_revenue - total_cogs
-total_opex_units = df["Gastos Operativos"].sum()
-net_profit_final = total_gross - total_opex_units - total_corporate_cost
+# --- TAB 5: LA VISIÓN DE FUTURO (YEARLY CASH MAP) ---
+with tab5:
+    st.header("🔮 Mapa de Caja: Próximos 12 Meses")
+    st.markdown("""
+    Aquí visualizamos el impacto real del flujo de caja. 
+    **Supuesto:** Las tiendas (DTC) venden constante mes a mes. El B2B entra fuerte cada 2 meses (acumulado 2x).
+    """)
 
-# Totales Caja
-total_working_capital = df["Necesidad Caja"].sum()
-
-# --- SCORECARD ---
-st.header("🏁 Resultados Estratégicos")
-
-kpi1, kpi2, kpi3 = st.columns(3)
-
-with kpi1:
-    st.metric("Ventas Totales", f"{currency}{total_revenue:,.0f}")
-    st.markdown("**Salud de Ventas**")
-
-with kpi2:
-    st.metric("Utilidad Neta (P&L)", f"{currency}{net_profit_final:,.0f}", 
-              delta_color="normal" if net_profit_final > 0 else "inverse", delta="Ganancia Contable")
-    st.markdown(f"Margen Neto: {((net_profit_final/total_revenue)*100) if total_revenue else 0:.1f}%")
-
-with kpi3:
-    # Esta es la métrica clave de caja
-    st.metric("Capital de Trabajo Requerido", f"{currency}{total_working_capital:,.0f}", delta="Dinero Congelado", delta_color="off")
-    st.markdown("**⚠️ Dinero que necesitas tener en el banco para financiar la operación (Cartera - Proveedores).**")
-
-# --- ANÁLISIS ---
-
-col_chart, col_details = st.columns([2, 1])
-
-with col_chart:
-    st.subheader("Cascada de Rentabilidad Real")
-    fig = go.Figure(go.Waterfall(
-        orientation = "v",
-        measure = ["relative", "relative", "total", "relative", "relative", "total"],
-        x = ["Ventas", "Costo Producto (COGS)", "Utilidad Bruta", "Gastos Tiendas", "Gastos HQ", "Utilidad Neta"],
-        y = [total_revenue, -total_cogs, total_gross, -total_opex_units, -total_corporate_cost, net_profit_final],
-        connector = {"line":{"color":"rgb(63, 63, 63)"}},
-        decreasing = {"marker":{"color":"#ef5350"}},
-        increasing = {"marker":{"color":"#66bb6a"}},
-        totals = {"marker":{"color":"#42a5f5"}}
-    ))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col_details:
-    st.markdown("### 💡 Análisis de Caja")
-    if total_working_capital > 0:
-        st.warning(f"""
-        **Alerta de Liquidez:**
-        Para sostener estas ventas, necesitas tener **{currency}{total_working_capital:,.0f}** en capital de trabajo.
+    # 1. Separar Ingresos DTC vs B2B
+    dtc_monthly_rev = df_units[df_units["Tipo"] == "DTC"]["Ingresos"].sum()
+    dtc_monthly_cogs = df_units[df_units["Tipo"] == "DTC"]["COGS"].sum()
+    
+    b2b_monthly_rev_avg = df_units[df_units["Tipo"] == "B2B"]["Ingresos"].sum()
+    b2b_monthly_cogs_avg = df_units[df_units["Tipo"] == "B2B"]["COGS"].sum()
+    
+    total_monthly_opex = df_units["Gastos Operativos"].sum() + total_corporate_cost
+    
+    # 2. Construir la Proyección de 12 Meses
+    months = list(range(1, 13))
+    cash_data = []
+    
+    current_balance = caja_inicial
+    
+    for m in months:
+        # Lógica B2B "Serrucho": Meses pares entra doble, meses impares entra 0 (o bajo)
+        # Asumimos que los COSTOS de producción ocurren todos los meses (para producir el inventario), 
+        # pero el INGRESO entra cada 2 meses.
         
-        Esto sucede porque B2B paga a 45 días, pero tú pagas nómina y proveedores antes.
-        """)
-        st.markdown("**Sugerencias:**")
-        st.markdown("- Negociar días de crédito con proveedores (Slider lateral).")
-        st.markdown("- Factorar facturas B2B.")
-    else:
-        st.success("Tu ciclo de caja es saludable. Cobras más rápido de lo que pagas.")
+        if m % 2 == 0:
+            # Mes Par: Entra el pago grande acumulado
+            b2b_cash_in = b2b_monthly_rev_avg * 2
+        else:
+            # Mes Impar: No entra pago B2B (estamos vendiendo pero no cobrando)
+            b2b_cash_in = 0
+            
+        # Ingreso Total Caja
+        total_cash_in = dtc_monthly_rev + b2b_cash_in
+        
+        # Egresos (Salidas de Caja)
+        # Asumimos que pagamos COGS todos los meses para mantener producción, 
+        # aunque podríamos ajustar esto si pagamos proveedores a crédito.
+        total_cash_out = total_monthly_opex + dtc_monthly_cogs + b2b_monthly_cogs_avg
+        
+        net_period = total_cash_in - total_cash_out
+        current_balance += net_period
+        
+        cash_data.append({
+            "Mes": f"Mes {m}",
+            "Ingreso DTC": dtc_monthly_rev,
+            "Ingreso B2B": b2b_cash_in,
+            "Total Ingresos": total_cash_in,
+            "Total Egresos": total_cash_out,
+            "Flujo Neto": net_period,
+            "Saldo en Banco": current_balance
+        })
+        
+    df_cash = pd.DataFrame(cash_data)
+    
+    # 3. Visualización
+    col_kpi1, col_kpi2 = st.columns(2)
+    min_balance = df_cash["Saldo en Banco"].min()
+    final_balance = df_cash["Saldo en Banco"].iloc[-1]
+    
+    with col_kpi1:
+        st.metric("Saldo Final (Mes 12)", f"{currency}{final_balance:,.0f}", 
+                 delta="Crecimiento de Caja" if final_balance > caja_inicial else "Destrucción de Caja")
+        
+    with col_kpi2:
+        st.metric("Punto Mínimo de Caja (Valle de la Muerte)", f"{currency}{min_balance:,.0f}",
+                 delta_color="off" if min_balance > 0 else "inverse")
+        if min_balance < 0:
+            st.error(f"⚠️ PELIGRO: Te quedas sin efectivo. Necesitas inyectar capital o crédito.")
+        else:
+            st.success("✅ Tu caja aguanta la operación todo el año.")
 
-# --- TABLA DETALLE ---
-with st.expander("Ver Detalle Numérico por Unidad"):
-    # FIX: Select only numeric columns for formatting to avoid ValueError on text columns
-    numeric_cols = df.select_dtypes(include=['number']).columns
-    format_dict = {col: f"{currency}{{:.0f}}" for col in numeric_cols}
-    st.dataframe(df.style.format(format_dict))
+    # Gráfica Combinada
+    fig = go.Figure()
+    
+    # Barras: Flujo Neto (Lo que entra vs sale cada mes)
+    fig.add_trace(go.Bar(
+        x=df_cash["Mes"],
+        y=df_cash["Flujo Neto"],
+        name="Flujo Neto Mensual",
+        marker_color=np.where(df_cash["Flujo Neto"] < 0, '#ef5350', '#66bb6a')
+    ))
+    
+    # Línea: Saldo en Banco
+    fig.add_trace(go.Scatter(
+        x=df_cash["Mes"],
+        y=df_cash["Saldo en Banco"],
+        name="Saldo Acumulado en Banco",
+        mode='lines+markers',
+        line=dict(color='#2c3e50', width=4),
+        yaxis="y2"
+    ))
+    
+    fig.update_layout(
+        title="Mapa de Calor: Flujo Neto vs Saldo en Banco",
+        yaxis=dict(title="Flujo Mensual"),
+        yaxis2=dict(title="Saldo en Banco", overlaying="y", side="right"),
+        legend=dict(x=0, y=1.1, orientation="h"),
+        height=500
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabla Detalle
+    with st.expander("Ver Tabla de Flujo Detallada"):
+        numeric_cols = df_cash.select_dtypes(include=['number']).columns
+        format_dict = {col: f"{currency}{{:.0f}}" for col in numeric_cols}
+        st.dataframe(df_cash.style.format(format_dict))
+
+# --- SCORECARD P&L (Mantenido abajo para referencia rápida) ---
+st.markdown("---")
+st.caption("Resumen Rápido P&L (Promedio Mensual Contable)")
+cols = st.columns(4)
+monthly_profit = df_units["Utilidad Operativa"].sum() - total_corporate_cost
+cols[0].metric("Ventas Totales (Avg)", f"{currency}{df_units['Ingresos'].sum():,.0f}")
+cols[1].metric("Gastos Totales", f"{currency}{(df_units['Gastos Operativos'].sum() + total_corporate_cost):,.0f}")
+cols[2].metric("Utilidad Neta (Avg)", f"{currency}{monthly_profit:,.0f}")
