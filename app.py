@@ -202,4 +202,11 @@ with col_details:
         st.markdown("- Negociar días de crédito con proveedores (Slider lateral).")
         st.markdown("- Factorar facturas B2B.")
     else:
-        st.success("Tu ciclo de caja es saludable
+        st.success("Tu ciclo de caja es saludable. Cobras más rápido de lo que pagas.")
+
+# --- TABLA DETALLE ---
+with st.expander("Ver Detalle Numérico por Unidad"):
+    # FIX: Select only numeric columns for formatting to avoid ValueError on text columns
+    numeric_cols = df.select_dtypes(include=['number']).columns
+    format_dict = {col: f"{currency}{{:.0f}}" for col in numeric_cols}
+    st.dataframe(df.style.format(format_dict))
