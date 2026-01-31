@@ -202,8 +202,4 @@ with col_details:
         st.markdown("- Negociar días de crédito con proveedores (Slider lateral).")
         st.markdown("- Factorar facturas B2B.")
     else:
-        st.success("Tu ciclo de caja es saludable. Cobras más rápido de lo que pagas.")
-
-# --- TABLA DETALLE ---
-with st.expander("Ver Detalle Numérico por Unidad"):
-    st.dataframe(df.style.format(f"{currency}{{:.0f}}"))
+        st.success("Tu ciclo de caja es saludable
