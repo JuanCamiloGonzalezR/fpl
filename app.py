@@ -44,10 +44,10 @@ st.sidebar.subheader("🏢 Costos HQ & Planta")
 salario_gerente_gen = st.sidebar.number_input("Salario G. General", 1000000, step=500000)
 salario_gerente_ops = st.sidebar.number_input("Salario G. Ops", 1000000, step=500000)
 salario_dir_prod = st.sidebar.number_input("Salario Dir. Producción", 1000000, step=500000)
-num_asistentes = st.sidebar.number_input("Cant. Asistentes Prod.", 3)
+num_asistentes = st.sidebar.number_input("Cant. Asistentes Prod.", min_value=1, value=1,step = 1)# default value
 salario_asistente = st.sidebar.number_input("Salario Asistente", 1000000, step=100000)
 # Fijos
-arriendo_planta = st.sidebar.number_input("Arriendo Planta", 4000000, step=500000)
+arriendo_planta = st.sidebar.number_input("Arriendo Planta", 1000000, step=500000)
 servicios_planta = st.sidebar.number_input("Servicios Planta", 1500000, step=100000)
 otros_gastos = st.sidebar.number_input("Otros Gastos Admin", 1000000, step=100000)
 
